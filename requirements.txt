@@ -6,4 +6,4 @@ email-validator==2.2.0
 python-dotenv==1.1.1
 gunicorn==23.0.0
 psycopg[binary]==3.2.9
-boto3==1.38.27
+pytest==8.4.1
