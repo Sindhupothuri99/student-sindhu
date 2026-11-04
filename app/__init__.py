@@ -67,6 +67,24 @@ class Notice(db.Model):
     audience=db.Column(db.String(20),default="all"); author_id=db.Column(db.Integer,db.ForeignKey("user.id"))
     created_at=db.Column(db.DateTime,default=datetime.utcnow); author=db.relationship("User")
 
+class Quiz(db.Model):
+    id=db.Column(db.Integer,primary_key=True); course_id=db.Column(db.Integer,db.ForeignKey("course.id"),nullable=False)
+    title=db.Column(db.String(160),nullable=False); description=db.Column(db.Text); duration_minutes=db.Column(db.Integer,default=20,nullable=False)
+    is_published=db.Column(db.Boolean,default=False,nullable=False); created_by=db.Column(db.Integer,db.ForeignKey("user.id"),nullable=False)
+    created_at=db.Column(db.DateTime,default=datetime.utcnow); course=db.relationship("Course",backref="quizzes")
+    questions=db.relationship("QuizQuestion",backref="quiz",cascade="all, delete-orphan",order_by="QuizQuestion.id")
+class QuizQuestion(db.Model):
+    id=db.Column(db.Integer,primary_key=True); quiz_id=db.Column(db.Integer,db.ForeignKey("quiz.id"),nullable=False)
+    question_text=db.Column(db.Text,nullable=False); option_a=db.Column(db.String(255),nullable=False); option_b=db.Column(db.String(255),nullable=False)
+    option_c=db.Column(db.String(255),nullable=False); option_d=db.Column(db.String(255),nullable=False); correct_option=db.Column(db.String(1),nullable=False)
+    marks=db.Column(db.Float,default=1,nullable=False)
+class QuizAttempt(db.Model):
+    id=db.Column(db.Integer,primary_key=True); quiz_id=db.Column(db.Integer,db.ForeignKey("quiz.id"),nullable=False)
+    student_id=db.Column(db.Integer,db.ForeignKey("student.id"),nullable=False); score=db.Column(db.Float,nullable=False)
+    total_marks=db.Column(db.Float,nullable=False); submitted_at=db.Column(db.DateTime,default=datetime.utcnow); answers_json=db.Column(db.Text)
+    quiz=db.relationship("Quiz",backref="attempts"); student=db.relationship("Student",backref="quiz_attempts")
+    __table_args__=(UniqueConstraint("quiz_id","student_id",name="uq_quiz_attempt"),)
+
 @login_manager.user_loader
 def load_user(uid): return db.session.get(User,int(uid))
 
@@ -87,7 +105,7 @@ BASE = """
 {% if current_user.is_authenticated %}<nav class='navbar navbar-expand-lg navbar-dark'><div class='container-fluid'><a class='navbar-brand fw-bold' href='/dashboard'>EduPrime</a><button class='navbar-toggler' data-bs-toggle='collapse' data-bs-target='#nav'><span class='navbar-toggler-icon'></span></button><div class='collapse navbar-collapse' id='nav'><ul class='navbar-nav me-auto'>
 <li class='nav-item'><a class='nav-link' href='/dashboard'>Dashboard</a></li>
 {% if current_user.role=='admin' %}<li class='nav-item'><a class='nav-link' href='/users'>Users</a></li><li class='nav-item'><a class='nav-link' href='/students'>Students</a></li><li class='nav-item'><a class='nav-link' href='/faculty'>Faculty</a></li><li class='nav-item'><a class='nav-link' href='/courses'>Courses</a></li>{% elif current_user.role=='faculty' %}<li class='nav-item'><a class='nav-link' href='/students'>Students</a></li>{% endif %}
-<li class='nav-item'><a class='nav-link' href='/attendance'>Attendance</a></li><li class='nav-item'><a class='nav-link' href='/assignments'>Assignments</a></li><li class='nav-item'><a class='nav-link' href='/exams'>Exams & Results</a></li><li class='nav-item'><a class='nav-link' href='/notices'>Notices</a></li></ul><span class='navbar-text me-3'>{{ current_user.full_name }} · {{ current_user.role|title }}</span><form method='post' action='/logout'><input type='hidden' name='csrf_token' value='{{ csrf_token() }}'><button class='btn btn-outline-light btn-sm'>Sign out</button></form></div></div></nav>{% endif %}
+<li class='nav-item'><a class='nav-link' href='/attendance'>Attendance</a></li><li class='nav-item'><a class='nav-link' href='/assignments'>Assignments</a></li><li class='nav-item'><a class='nav-link' href='/exams'>Exams & Results</a></li><li class='nav-item'><a class='nav-link' href='/notices'>Notices</a></li><li class='nav-item'><a class='nav-link' href='/quizzes'>Quizzes & MCQs</a></li></ul><span class='navbar-text me-3'>{{ current_user.full_name }} · {{ current_user.role|title }}</span><form method='post' action='/logout'><input type='hidden' name='csrf_token' value='{{ csrf_token() }}'><button class='btn btn-outline-light btn-sm'>Sign out</button></form></div></div></nav>{% endif %}
 <main class='container py-4'>{% with msgs=get_flashed_messages(with_categories=true) %}{% for cat,msg in msgs %}<div class='alert alert-{{cat}} alert-dismissible fade show'>{{msg}}<button class='btn-close' data-bs-dismiss='alert'></button></div>{% endfor %}{% endwith %}{{ body|safe }}</main><footer class='text-center text-secondary small py-4'>EduPrime · Student Management System</footer><script src='https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js'></script></body></html>
 """
 def page(title,body,**ctx):
@@ -119,9 +137,21 @@ def create_app(test_config=None):
     @app.get("/dashboard")
     @login_required
     def dashboard():
-        stats=[("Students",Student.query.count()),("Faculty",Faculty.query.count()),("Courses",Course.query.count()),("Assignments",Assignment.query.count())]
         notices=Notice.query.filter(Notice.audience.in_(["all",current_user.role])).order_by(Notice.created_at.desc()).limit(5).all()
-        return page("Dashboard","""<h1 class='h3 fw-bold'>Welcome, {{current_user.full_name}}</h1><p class='text-secondary'>Your academic workspace at a glance.</p><div class='row g-3 my-3'>{% for label,value in stats %}<div class='col-6 col-xl-3'><div class='stat'><div class='text-secondary'>{{label}}</div><b>{{value}}</b></div></div>{% endfor %}</div><div class='row g-3'><div class='col-lg-7'><div class='card p-4'><h5>Quick access</h5><div class='quick'><a href='/attendance'>Attendance · Daily records</a><a href='/assignments'>Assignments · Publish and submit</a><a href='/exams'>Exams & Results · Schedules and grades</a><a href='/notices'>Notices · Announcements</a></div></div></div><div class='col-lg-5'><div class='card p-4'><h5>Latest notices</h5>{% for n in notices %}<p class='border-bottom pb-2'><b>{{n.title}}</b><br><small class='text-secondary'>{{n.body}}</small></p>{% else %}<p class='text-secondary'>No notices published.</p>{% endfor %}</div></div></div>""",stats=stats,notices=notices)
+        if current_user.role=="admin":
+            stats=[("Students",Student.query.count()),("Faculty",Faculty.query.count()),("Courses",Course.query.count()),("Quizzes",Quiz.query.count())]
+            return page("Admin Dashboard","""<span class='badge bg-primary'>ADMIN CONSOLE</span><h1 class='h3 fw-bold mt-2'>Welcome, {{current_user.full_name}}</h1><p class='text-secondary'>Institution overview and controls.</p><div class='row g-3 my-3'>{% for label,value in stats %}<div class='col-6 col-xl-3'><div class='stat'><div class='text-secondary'>{{label}}</div><b>{{value}}</b></div></div>{% endfor %}</div><div class='card p-4'><h5>Administration</h5><div class='row quick'><div class='col-md-6'><a href='/users'>👥 User accounts</a></div><div class='col-md-6'><a href='/students'>🎓 Student management</a></div><div class='col-md-6'><a href='/faculty'>🧑‍🏫 Faculty management</a></div><div class='col-md-6'><a href='/courses'>📚 Course management</a></div><div class='col-md-6'><a href='/attendance'>📊 Attendance</a></div><div class='col-md-6'><a href='/exams'>📝 Exams & results</a></div><div class='col-md-6'><a href='/quizzes'>✅ Quiz & MCQ manager</a></div><div class='col-md-6'><a href='/notices'>📢 Announcements</a></div></div></div>""",stats=stats)
+        if current_user.role=="faculty":
+            ids=assigned_course_ids(); courses=Course.query.filter(Course.id.in_(ids)).all() if ids else []
+            stats=[("My courses",len(courses)),("Assignments",Assignment.query.filter(Assignment.course_id.in_(ids)).count() if ids else 0),("Quizzes",Quiz.query.filter(Quiz.course_id.in_(ids)).count() if ids else 0),("Students",Student.query.count())]
+            return page("Faculty Dashboard","""<span class='badge bg-success'>FACULTY WORKSPACE</span><h1 class='h3 fw-bold mt-2'>Welcome, {{current_user.full_name}}</h1><p class='text-secondary'>Teaching, assessments and student progress.</p><div class='row g-3 my-3'>{% for label,value in stats %}<div class='col-6 col-xl-3'><div class='stat'><div class='text-secondary'>{{label}}</div><b>{{value}}</b></div></div>{% endfor %}</div><div class='card p-4'><h5>Teaching tools</h5><div class='quick'><a href='/students'>👥 Student directory</a><a href='/attendance'>📅 Mark attendance</a><a href='/assignments'>📘 Assignments & submissions</a><a href='/exams'>📝 Exams & marks</a><a href='/quizzes'>✅ Create MCQ quizzes & review attempts</a><a href='/notices'>📢 Class announcements</a></div><h6 class='mt-3'>Assigned courses</h6>{% for course in courses %}<p>{{course.code}} · {{course.title}}</p>{% else %}<p class='text-secondary'>No courses assigned.</p>{% endfor %}</div>""",stats=stats,courses=courses)
+        profile=Student.query.filter_by(user_id=current_user.id).first()
+        if not profile: return page("Student Dashboard","<div class='card p-4'><h1 class='h4'>Welcome, {{current_user.full_name}}</h1><p>Your student profile is not configured. Contact the administrator.</p></div>")
+        attendance=Attendance.query.filter_by(student_id=profile.id).all(); present=sum(1 for row in attendance if row.status=="Present")
+        attendance_pct=round(present/len(attendance)*100) if attendance else 0
+        attempts=QuizAttempt.query.filter_by(student_id=profile.id).order_by(QuizAttempt.submitted_at.desc()).limit(5).all()
+        stats=[("Attendance",str(attendance_pct)+"%"),("Assignments",Assignment.query.count()),("Available quizzes",Quiz.query.filter_by(is_published=True).count()),("Quiz attempts",QuizAttempt.query.filter_by(student_id=profile.id).count())]
+        return page("Student Dashboard","""<span class='badge bg-info text-dark'>STUDENT PORTAL</span><h1 class='h3 fw-bold mt-2'>Hello, {{current_user.full_name}} 👋</h1><p class='text-secondary'>{{profile.roll_number}} · {{profile.department}} · Year {{profile.year}}</p><div class='row g-3 my-3'>{% for label,value in stats %}<div class='col-6 col-xl-3'><div class='stat'><div class='text-secondary'>{{label}}</div><b>{{value}}</b></div></div>{% endfor %}</div><div class='row g-3'><div class='col-lg-7'><div class='card p-4'><h5>My learning</h5><div class='quick'><a href='/attendance'>📊 My attendance</a><a href='/assignments'>📘 Assignments</a><a href='/exams'>📝 Exam timetable & results</a><a href='/quizzes'>✅ Take MCQ quizzes</a><a href='/quizzes/results'>🏅 My quiz results</a><a href='/notices'>📢 Campus notices</a></div></div><div class='card p-4 mt-3'><h5>Recent quiz attempts</h5>{% for a in attempts %}<p>{{a.quiz.title}} · <b>{{a.score}} / {{a.total_marks}}</b></p>{% else %}<p class='text-secondary'>No quiz attempts yet.</p>{% endfor %}</div></div><div class='col-lg-5'><div class='card p-4'><h5>Latest notices</h5>{% for n in notices %}<p><b>{{n.title}}</b><br><small>{{n.body}}</small></p>{% else %}<p class='text-secondary'>No notices.</p>{% endfor %}</div></div></div>""",profile=profile,stats=stats,attempts=attempts,notices=notices)
     @app.route("/users",methods=["GET","POST"])
     @roles("admin")
     def users():
@@ -249,6 +279,75 @@ def create_app(test_config=None):
             db.session.commit(); flash("Result saved.","success")
         except (ValueError,KeyError): db.session.rollback(); flash("Marks must be within the exam maximum.","danger")
         return redirect("/exams")
+    @app.route("/quizzes",methods=["GET","POST"])
+    @login_required
+    def quizzes():
+        if request.method=="POST":
+            if current_user.role not in ("admin","faculty"): abort(403)
+            try:
+                course_id=int(request.form["course_id"]); duration=int(request.form.get("duration_minutes",20))
+                if current_user.role=="faculty" and course_id not in assigned_course_ids(): abort(403)
+                title=request.form.get("title","").strip()
+                if not title or duration not in range(1,241): raise ValueError()
+                quiz=Quiz(course_id=course_id,title=title,description=request.form.get("description","").strip(),duration_minutes=duration,created_by=current_user.id)
+                db.session.add(quiz); db.session.flush(); count=0
+                for i in range(1,21):
+                    prompt=request.form.get(f"question_{i}","").strip()
+                    if not prompt: continue
+                    options=[request.form.get(f"q{i}_{x}","").strip() for x in "abcd"]
+                    answer=request.form.get(f"answer_{i}","").lower(); marks=float(request.form.get(f"marks_{i}",1))
+                    if not all(options) or answer not in ("a","b","c","d") or marks<=0: raise ValueError()
+                    db.session.add(QuizQuestion(quiz_id=quiz.id,question_text=prompt,option_a=options[0],option_b=options[1],option_c=options[2],option_d=options[3],correct_option=answer,marks=marks)); count+=1
+                if not count: raise ValueError()
+                quiz.is_published=True; db.session.commit(); flash(f"Published {count}-question quiz.","success")
+            except (ValueError,KeyError):
+                db.session.rollback(); flash("Quiz not saved. Complete at least one MCQ with four options, correct answer and marks.","danger")
+            return redirect("/quizzes")
+        query=Quiz.query
+        if current_user.role=="faculty":
+            ids=assigned_course_ids(); query=query.filter(Quiz.course_id.in_(ids)) if ids else query.filter(False)
+        if current_user.role=="student": query=query.filter_by(is_published=True)
+        items=query.order_by(Quiz.created_at.desc()).all()
+        courses=Course.query.filter(Course.id.in_(assigned_course_ids())).all() if current_user.role=="faculty" else Course.query.all()
+        student=Student.query.filter_by(user_id=current_user.id).first() if current_user.role=="student" else None
+        attempted={a.quiz_id:a for a in QuizAttempt.query.filter_by(student_id=student.id).all()} if student else {}
+        return page("Quizzes & MCQs","""<h1 class='h3 fw-bold'>Quizzes & MCQs</h1><p class='text-secondary'>Create assessments or test your knowledge.</p>{% if current_user.role in ['admin','faculty'] %}<div class='card p-4 mb-4'><h5>Create MCQ quiz</h5><form method='post'><input type='hidden' name='csrf_token' value='{{csrf_token()}}'><div class='row g-2 mb-3'><div class='col-md-5'><input class='form-control' name='title' placeholder='Quiz title' required></div><div class='col-md-4'><select class='form-select' name='course_id' required><option value=''>Course</option>{% for c in courses %}<option value='{{c.id}}'>{{c.code}} · {{c.title}}</option>{% endfor %}</select></div><div class='col-md-3'><input class='form-control' type='number' name='duration_minutes' min='1' max='240' value='20' required></div><div class='col-12'><input class='form-control' name='description' placeholder='Instructions'></div></div><div id='question-list'>{% for i in range(1,4) %}<div class='border rounded p-3 mb-3'><h6>Question {{i}}</h6><input class='form-control mb-2' name='question_{{i}}' placeholder='Question text'><div class='row g-2'>{% for x in ['a','b','c','d'] %}<div class='col-md-6'><input class='form-control' name='q{{i}}_{{x}}' placeholder='Option {{x|upper}}'></div>{% endfor %}<div class='col-md-4'><select class='form-select' name='answer_{{i}}'><option value=''>Correct option</option><option value='a'>A</option><option value='b'>B</option><option value='c'>C</option><option value='d'>D</option></select></div><div class='col-md-3'><input class='form-control' type='number' name='marks_{{i}}' min='.5' step='.5' value='1'></div></div></div>{% endfor %}</div><button type='button' id='add-question' class='btn btn-outline-secondary btn-sm'>+ Add question</button> <button class='btn btn-primary'>Publish quiz</button></form></div><script>document.getElementById('add-question').addEventListener('click',()=>{const list=document.getElementById('question-list'),n=list.children.length+1;if(n>20){alert('Maximum 20 questions');return;}const box=document.createElement('div');box.className='border rounded p-3 mb-3';let h='<h6>Question '+n+'</h6><input class="form-control mb-2" name="question_'+n+'" placeholder="Question text"><div class="row g-2">';['a','b','c','d'].forEach(x=>h+='<div class="col-md-6"><input class="form-control" name="q'+n+'_'+x+'" placeholder="Option '+x.toUpperCase()+'"></div>');h+='<div class="col-md-4"><select class="form-select" name="answer_'+n+'"><option value="">Correct option</option><option value="a">A</option><option value="b">B</option><option value="c">C</option><option value="d">D</option></select></div><div class="col-md-3"><input class="form-control" type="number" name="marks_'+n+'" min=".5" step=".5" value="1"></div></div>';box.innerHTML=h;list.appendChild(box);});</script>{% endif %}<div class='row g-3'>{% for q in items %}<div class='col-md-6'><div class='card p-4 h-100'><span class='badge bg-light text-dark'>{{q.course.code}}</span><h5 class='mt-2'>{{q.title}}</h5><p>{{q.description or 'MCQ assessment'}}</p><small>{{q.questions|length}} questions · {{q.duration_minutes}} minutes</small>{% if current_user.role=='student' %}{% if not student %}<p>Student profile required</p>{% elif q.id in attempted %}<span class='badge bg-success'>Completed · {{attempted[q.id].score}}/{{attempted[q.id].total_marks}}</span>{% else %}<a class='btn btn-primary mt-3' href='/quizzes/{{q.id}}/attempt'>Start quiz</a>{% endif %}{% else %}<a class='btn btn-outline-primary mt-3' href='/quizzes/{{q.id}}/attempts'>View attempts</a>{% endif %}</div></div>{% else %}<p class='text-secondary'>No quizzes available.</p>{% endfor %}</div>""",items=items,courses=courses,student=student,attempted=attempted)
+
+    @app.route("/quizzes/<int:qid>/attempt",methods=["GET","POST"])
+    @roles("student")
+    def attempt_quiz(qid):
+        student=Student.query.filter_by(user_id=current_user.id).first()
+        if not student: flash("Student profile required.","warning"); return redirect("/quizzes")
+        quiz=Quiz.query.filter_by(id=qid,is_published=True).first_or_404()
+        if QuizAttempt.query.filter_by(quiz_id=qid,student_id=student.id).first(): return redirect("/quizzes/results")
+        questions=quiz.questions
+        if request.method=="POST":
+            score=0.0; total=sum(float(q.marks) for q in questions); answers={}
+            for q in questions:
+                answer=request.form.get(f"question_{q.id}","").lower()
+                answers[str(q.id)]=answer if answer in ("a","b","c","d") else ""
+                if answers[str(q.id)]==q.correct_option: score+=float(q.marks)
+            db.session.add(QuizAttempt(quiz_id=qid,student_id=student.id,score=score,total_marks=total,answers_json=__import__("json").dumps(answers)))
+            try: db.session.commit()
+            except Exception: db.session.rollback(); flash("Attempt may already be submitted.","danger"); return redirect("/quizzes")
+            flash(f"Submitted. Score: {score:g} / {total:g}.","success"); return redirect("/quizzes/results")
+        return page(quiz.title,"""<h1 class='h3 fw-bold'>{{quiz.title}}</h1><p class='text-secondary'>{{quiz.course.code}} · {{quiz.duration_minutes}} minutes</p><form method='post'><input type='hidden' name='csrf_token' value='{{csrf_token()}}'>{% for q in questions %}<div class='card p-4 mb-3'><h5>{{loop.index}}. {{q.question_text}}</h5><small>{{q.marks}} marks</small>{% for letter,opt in [('a',q.option_a),('b',q.option_b),('c',q.option_c),('d',q.option_d)] %}<label class='d-block border rounded p-2 my-2'><input type='radio' name='question_{{q.id}}' value='{{letter}}' required> {{letter|upper}}. {{opt}}</label>{% endfor %}</div>{% endfor %}<button class='btn btn-primary btn-lg'>Submit quiz</button></form>""",quiz=quiz,questions=questions)
+
+    @app.get("/quizzes/results")
+    @roles("student")
+    def quiz_results():
+        student=Student.query.filter_by(user_id=current_user.id).first()
+        rows=QuizAttempt.query.filter_by(student_id=student.id).order_by(QuizAttempt.submitted_at.desc()).all() if student else []
+        return page("Quiz results","""<h1 class='h3 fw-bold'>My quiz results</h1><div class='card table-responsive'><table class='table mb-0'><tr><th>Quiz</th><th>Course</th><th>Score</th><th>Submitted</th></tr>{% for a in rows %}<tr><td>{{a.quiz.title}}</td><td>{{a.quiz.course.code}}</td><td>{{a.score}} / {{a.total_marks}}</td><td>{{a.submitted_at.strftime('%d %b %Y %H:%M')}}</td></tr>{% else %}<tr><td colspan='4'>No attempts yet.</td></tr>{% endfor %}</table></div>""",rows=rows)
+
+    @app.get("/quizzes/<int:qid>/attempts")
+    @roles("admin","faculty")
+    def quiz_attempts(qid):
+        quiz=db.get_or_404(Quiz,qid)
+        if current_user.role=="faculty" and quiz.course_id not in assigned_course_ids(): abort(403)
+        rows=QuizAttempt.query.filter_by(quiz_id=qid).order_by(QuizAttempt.submitted_at.desc()).all()
+        return page("Quiz attempts","""<h1 class='h3 fw-bold'>{{quiz.title}} · attempts</h1><div class='card table-responsive'><table class='table'><tr><th>Student</th><th>Roll number</th><th>Score</th><th>Submitted</th></tr>{% for a in rows %}<tr><td>{{a.student.user.full_name}}</td><td>{{a.student.roll_number}}</td><td>{{a.score}} / {{a.total_marks}}</td><td>{{a.submitted_at.strftime('%d %b %Y %H:%M')}}</td></tr>{% else %}<tr><td colspan='4'>No attempts yet.</td></tr>{% endfor %}</table></div>""",quiz=quiz,rows=rows)
+
     @app.route("/notices",methods=["GET","POST"])
     @login_required
     def notices():

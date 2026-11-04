@@ -8,7 +8,7 @@ EduPrime is a role-based Student Management System built with Python Flask, SQLA
 - Faculty: view students, mark attendance for assigned courses, publish assignments, schedule exams and enter results.
 - Student: view attendance, assignments, exam schedule and results; submit assignments.
 - SQLAlchemy relational models: users, students, faculty, courses, attendance, assignments, submissions, exams, results and notices.
-- Responsive Bootstrap UI; SQLite fallback for local development.
+- Separate role-specific Admin, Faculty and Student dashboards.\n- MCQ quiz builder with up to 20 questions, four options, configurable marks, automatic scoring, one attempt per student, and faculty/admin attempt reports.\n- Responsive Bootstrap UI; SQLite fallback for local development.
 
 ## Run locally
 ```bash
