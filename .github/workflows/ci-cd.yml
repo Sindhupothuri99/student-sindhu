@@ -1,4 +1,4 @@
-name: EduPrime CI Pipeline
+name: EduPrime CI-CD Pipeline
 
 on:
   push:
@@ -14,11 +14,12 @@ permissions:
   pull-requests: read
 
 jobs:
-  build-and-test:
+  test-and-scan:
+    name: Python Tests and SonarQube Scan
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: Checkout Source Code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -30,11 +31,12 @@ jobs:
 
       - name: Install Dependencies
         run: |
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Run Pytest
         run: |
-          python -m pytest -q
+          python -m pytest -v
 
       - name: SonarQube Cloud Scan
         uses: SonarSource/sonarqube-scan-action@v5

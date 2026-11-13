@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eduprime-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: eduprime
+  template:
+    metadata:
+      labels:
+        app: eduprime
+    spec:
+      containers:
+        - name: eduprime
+          image: docker.io/library/eduprime-app:v1
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 5000
+          envFrom:
+            - secretRef:
+                name: eduprime-secret
+          volumeMounts:
+            - name: eduprime-storage
+              mountPath: /app/instance
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+      volumes:
+        - name: eduprime-storage
+          persistentVolumeClaim:
+            claimName: eduprime-pvc
