@@ -20,12 +20,12 @@ jobs:
 
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -38,10 +38,17 @@ jobs:
         run: |
           python -m pytest -v
 
-      - name: SonarQube Cloud Scan
-        uses: SonarSource/sonarqube-scan-action@v5
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
           args: >
+            -Dsonar.organization=sindhupothuri99
+            -Dsonar.projectKey=Sindhupothuri99_student-sindhu
+            -Dsonar.projectName="EduPrime Student Management System"
+            -Dsonar.sources=app
+            -Dsonar.tests=tests
+            -Dsonar.python.version=3.12
+            -Dsonar.sourceEncoding=UTF-8
             -Dsonar.qualitygate.wait=true
