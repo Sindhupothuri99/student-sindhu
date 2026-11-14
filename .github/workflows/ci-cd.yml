@@ -34,7 +34,7 @@ jobs:
           python -m pip install --require-hashes --only-binary=:all: -r requirements-lock.txt
       - name: Run Pytest
         run: |
-          python -m pytest -v
+          python -m pytest --cov=app --cov-report=xml:coverage.xml
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@fd88b7d7ccbaefd23d8f36f73b59db7a3d246602 # v6.0.0
@@ -48,5 +48,6 @@ jobs:
             -Dsonar.sources=app
             -Dsonar.tests=tests
             -Dsonar.python.version=3.12
+            -Dsonar.python.coverage.reportPaths=coverage.xml
             -Dsonar.sourceEncoding=UTF-8
             -Dsonar.qualitygate.wait=true
