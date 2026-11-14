@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from functools import wraps
 from flask import Flask, request, redirect, url_for, flash, render_template_string, abort
 from flask_sqlalchemy import SQLAlchemy
@@ -19,7 +19,7 @@ class User(UserMixin, db.Model):
     password_hash=db.Column(db.String(255), nullable=False)
     role=db.Column(db.String(20), nullable=False, default="student")
     is_active=db.Column(db.Boolean, default=True, nullable=False)
-    created_at=db.Column(db.DateTime, default=datetime.utcnow)
+    created_at=db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     def set_password(self,p): self.password_hash=generate_password_hash(p)
     def check_password(self,p): return check_password_hash(self.password_hash,p)
 
@@ -45,12 +45,12 @@ class Attendance(db.Model):
 class Assignment(db.Model):
     id=db.Column(db.Integer,primary_key=True); course_id=db.Column(db.Integer,db.ForeignKey("course.id"),nullable=False)
     title=db.Column(db.String(160),nullable=False); description=db.Column(db.Text); due_date=db.Column(db.Date,nullable=False)
-    created_by=db.Column(db.Integer,db.ForeignKey("user.id")); created_at=db.Column(db.DateTime,default=datetime.utcnow)
+    created_by=db.Column(db.Integer,db.ForeignKey("user.id")); created_at=db.Column(db.DateTime,default=lambda: datetime.now(timezone.utc))
     course=db.relationship("Course",backref="assignments")
 class Submission(db.Model):
     id=db.Column(db.Integer,primary_key=True); assignment_id=db.Column(db.Integer,db.ForeignKey("assignment.id"),nullable=False)
     student_id=db.Column(db.Integer,db.ForeignKey("student.id"),nullable=False); answer_text=db.Column(db.Text,nullable=False)
-    submitted_at=db.Column(db.DateTime,default=datetime.utcnow); grade=db.Column(db.String(10)); feedback=db.Column(db.Text)
+    submitted_at=db.Column(db.DateTime,default=lambda: datetime.now(timezone.utc)); grade=db.Column(db.String(10)); feedback=db.Column(db.Text)
     assignment=db.relationship("Assignment",backref="submissions"); student=db.relationship("Student",backref="submissions")
     __table_args__=(UniqueConstraint("assignment_id","student_id",name="uq_assignment_submission"),)
 class Exam(db.Model):
@@ -65,13 +65,13 @@ class Result(db.Model):
 class Notice(db.Model):
     id=db.Column(db.Integer,primary_key=True); title=db.Column(db.String(160),nullable=False); body=db.Column(db.Text,nullable=False)
     audience=db.Column(db.String(20),default="all"); author_id=db.Column(db.Integer,db.ForeignKey("user.id"))
-    created_at=db.Column(db.DateTime,default=datetime.utcnow); author=db.relationship("User")
+    created_at=db.Column(db.DateTime,default=lambda: datetime.now(timezone.utc)); author=db.relationship("User")
 
 class Quiz(db.Model):
     id=db.Column(db.Integer,primary_key=True); course_id=db.Column(db.Integer,db.ForeignKey("course.id"),nullable=False)
     title=db.Column(db.String(160),nullable=False); description=db.Column(db.Text); duration_minutes=db.Column(db.Integer,default=20,nullable=False)
     is_published=db.Column(db.Boolean,default=False,nullable=False); created_by=db.Column(db.Integer,db.ForeignKey("user.id"),nullable=False)
-    created_at=db.Column(db.DateTime,default=datetime.utcnow); course=db.relationship("Course",backref="quizzes")
+    created_at=db.Column(db.DateTime,default=lambda: datetime.now(timezone.utc)); course=db.relationship("Course",backref="quizzes")
     questions=db.relationship("QuizQuestion",backref="quiz",cascade="all, delete-orphan",order_by="QuizQuestion.id")
 class QuizQuestion(db.Model):
     id=db.Column(db.Integer,primary_key=True); quiz_id=db.Column(db.Integer,db.ForeignKey("quiz.id"),nullable=False)
@@ -81,7 +81,7 @@ class QuizQuestion(db.Model):
 class QuizAttempt(db.Model):
     id=db.Column(db.Integer,primary_key=True); quiz_id=db.Column(db.Integer,db.ForeignKey("quiz.id"),nullable=False)
     student_id=db.Column(db.Integer,db.ForeignKey("student.id"),nullable=False); score=db.Column(db.Float,nullable=False)
-    total_marks=db.Column(db.Float,nullable=False); submitted_at=db.Column(db.DateTime,default=datetime.utcnow); answers_json=db.Column(db.Text)
+    total_marks=db.Column(db.Float,nullable=False); submitted_at=db.Column(db.DateTime,default=lambda: datetime.now(timezone.utc)); answers_json=db.Column(db.Text)
     quiz=db.relationship("Quiz",backref="attempts"); student=db.relationship("Student",backref="quiz_attempts")
     __table_args__=(UniqueConstraint("quiz_id","student_id",name="uq_quiz_attempt"),)
 
@@ -246,7 +246,7 @@ def create_app(test_config=None):
         elif not answer or date.today()>a.due_date: flash("Submission is empty or past the due date.","danger")
         else:
             sub=Submission.query.filter_by(assignment_id=aid,student_id=s.id).first()
-            if sub: sub.answer_text=answer; sub.submitted_at=datetime.utcnow()
+            if sub: sub.answer_text=answer; sub.submitted_at=datetime.now(timezone.utc)
             else: db.session.add(Submission(assignment_id=aid,student_id=s.id,answer_text=answer))
             db.session.commit(); flash("Assignment submitted.","success")
         return redirect("/assignments")

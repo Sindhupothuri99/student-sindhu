@@ -12,6 +12,7 @@ spec:
       labels:
         app: eduprime
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: eduprime
           image: docker.io/library/eduprime-app:v1
@@ -40,9 +41,11 @@ spec:
             requests:
               memory: "256Mi"
               cpu: "250m"
+              ephemeral-storage: "256Mi"
             limits:
               memory: "1Gi"
               cpu: "1000m"
+              ephemeral-storage: "1Gi"
       volumes:
         - name: eduprime-storage
           persistentVolumeClaim:
