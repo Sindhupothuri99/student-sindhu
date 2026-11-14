@@ -12,7 +12,12 @@ RUN pip install --no-cache-dir --require-hashes --only-binary=:all: -r requireme
 COPY app/ ./app/
 COPY config.py run.py ./
 
-RUN mkdir -p /app/instance
+RUN groupadd --system appuser && \
+    useradd --system --gid appuser --home-dir /app --no-create-home appuser && \
+    mkdir -p /app/instance && \
+    chown -R appuser:appuser /app
+
+USER appuser
 
 EXPOSE 5000
 
