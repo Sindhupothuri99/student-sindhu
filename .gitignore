@@ -6,3 +6,15 @@ __pycache__/
 instance/
 *.db
 .pytest_cache/
+
+# Coverage reports
+.coverage
+coverage.xml
+
+# Logs
+*.log
+
+# Database backups
+*.db
+*.sqlite
+*.sqlite3
